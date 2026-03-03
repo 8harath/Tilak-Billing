@@ -4,7 +4,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- Create schools table
 CREATE TABLE schools (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  name TEXT NOT NULL,
+  name TEXT NOT NULL UNIQUE,
   logo_url TEXT,
   email TEXT,
   phone TEXT,
@@ -39,7 +39,8 @@ CREATE TABLE fee_structures (
   amount NUMERIC(12, 2) NOT NULL,
   due_date DATE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  UNIQUE(school_id, academic_year, class, name)
 );
 
 -- Create users table (extends auth.users)
@@ -155,21 +156,14 @@ CREATE POLICY "transaction_items_insert" ON transaction_items
     )
   ));
 
--- Create RLS policies for users (admin only)
-CREATE POLICY "users_select_own_school" ON users
-  FOR SELECT USING (school_id IN (
-    SELECT school_id FROM users WHERE id = auth.uid() AND role = 'admin'
-  ));
+-- Create RLS policies for users
+-- App APIs need every authenticated user to read their own profile row.
+CREATE POLICY "users_select_self" ON users
+  FOR SELECT USING (id = auth.uid());
 
-CREATE POLICY "users_insert_admin" ON users
-  FOR INSERT WITH CHECK (school_id IN (
-    SELECT school_id FROM users WHERE id = auth.uid() AND role = 'admin'
-  ));
-
-CREATE POLICY "users_update_admin" ON users
-  FOR UPDATE USING (school_id IN (
-    SELECT school_id FROM users WHERE id = auth.uid() AND role = 'admin'
-  ));
+CREATE POLICY "users_update_self" ON users
+  FOR UPDATE USING (id = auth.uid())
+  WITH CHECK (id = auth.uid());
 
 -- Create RLS policies for schools (users can read their own school)
 CREATE POLICY "schools_select_own" ON schools
@@ -181,7 +175,7 @@ CREATE POLICY "schools_select_own" ON schools
 -- School
 INSERT INTO schools (name, email, phone, address) 
 VALUES ('Tilak School', 'admin@tilak.edu', '+91-9876543210', 'Mumbai, India')
-ON CONFLICT DO NOTHING;
+ON CONFLICT (name) DO NOTHING;
 
 -- Get school_id for reference
 -- Note: In actual implementation, this would be parameterized

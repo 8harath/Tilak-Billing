@@ -6,7 +6,7 @@ VALUES (
   '+91 98458 03977',
   '1st Main 10th Cross, Mangammanapalya, Bengaluru - 560068 | Head Office: Swagath Main Road Tilaknagar, Jayanagar, Bengaluru - 560041'
 )
-ON CONFLICT DO NOTHING;
+ON CONFLICT (name) DO NOTHING;
 
 -- Get the school ID for subsequent inserts and insert demo students
 WITH school AS (

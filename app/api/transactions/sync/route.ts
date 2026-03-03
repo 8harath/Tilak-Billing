@@ -1,5 +1,29 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+
+const syncTransactionItemSchema = z.object({
+  studentId: z.string().uuid('studentId must be a valid UUID'),
+  amount: z.coerce
+    .number({ invalid_type_error: 'amount must be a number' })
+    .positive('amount must be greater than zero')
+    .max(1_000_000_000, 'amount is too large'),
+  feeType: z
+    .string({ required_error: 'feeType is required' })
+    .trim()
+    .min(1, 'feeType is required')
+    .max(120, 'feeType is too long'),
+  paymentDate: z
+    .string({ required_error: 'paymentDate is required' })
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'paymentDate must be YYYY-MM-DD'),
+  notes: z.string().trim().max(1000, 'notes is too long').optional(),
+});
+
+const syncTransactionsSchema = z.object({
+  transactions: z
+    .array(syncTransactionItemSchema)
+    .max(200, 'Too many transactions in a single sync request'),
+});
 
 function generateReceiptNumber(): string {
   const timestamp = Date.now();
@@ -11,6 +35,17 @@ export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();
     const body = await request.json();
+    const parsedBody = syncTransactionsSchema.safeParse(body);
+
+    if (!parsedBody.success) {
+      return NextResponse.json(
+        {
+          error: 'Invalid request body',
+          details: parsedBody.error.issues.map((issue) => issue.message),
+        },
+        { status: 400 }
+      );
+    }
 
     // Get current user
     const {
@@ -33,7 +68,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    const transactions = body.transactions || [];
+    const transactions = parsedBody.data.transactions;
     const syncedTransactions = [];
 
     // Process each pending transaction
@@ -75,6 +110,10 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     );
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON payload' }, { status: 400 });
+    }
+
     console.error('Sync API error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

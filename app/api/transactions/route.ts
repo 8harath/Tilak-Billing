@@ -1,5 +1,23 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+
+const createTransactionSchema = z.object({
+  studentId: z.string().uuid('studentId must be a valid UUID'),
+  amount: z.coerce
+    .number({ invalid_type_error: 'amount must be a number' })
+    .positive('amount must be greater than zero')
+    .max(1_000_000_000, 'amount is too large'),
+  feeType: z
+    .string({ required_error: 'feeType is required' })
+    .trim()
+    .min(1, 'feeType is required')
+    .max(120, 'feeType is too long'),
+  paymentDate: z
+    .string({ required_error: 'paymentDate is required' })
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'paymentDate must be YYYY-MM-DD'),
+  notes: z.string().trim().max(1000, 'notes is too long').optional(),
+});
 
 function generateReceiptNumber(): string {
   const timestamp = Date.now();
@@ -70,6 +88,17 @@ export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();
     const body = await request.json();
+    const parsedBody = createTransactionSchema.safeParse(body);
+
+    if (!parsedBody.success) {
+      return NextResponse.json(
+        {
+          error: 'Invalid request body',
+          details: parsedBody.error.issues.map((issue) => issue.message),
+        },
+        { status: 400 }
+      );
+    }
 
     // Get current user
     const {
@@ -98,11 +127,11 @@ export async function POST(request: NextRequest) {
       .from('transactions')
       .insert({
         school_id: userData.school_id,
-        student_id: body.studentId,
-        amount_paid: body.amount,
-        fee_type: body.feeType,
-        payment_date: body.paymentDate,
-        notes: body.notes || '',
+        student_id: parsedBody.data.studentId,
+        amount_paid: parsedBody.data.amount,
+        fee_type: parsedBody.data.feeType,
+        payment_date: parsedBody.data.paymentDate,
+        notes: parsedBody.data.notes || '',
         receipt_number: receiptNumber,
         created_by: user.id,
       })
@@ -115,6 +144,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(transaction, { status: 201 });
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON payload' }, { status: 400 });
+    }
+
     console.error('Transaction creation error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

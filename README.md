@@ -21,12 +21,16 @@ What currently works:
 - Fee structure API class filtering
 - Transactions API with item-level persistence (`transaction_items`)
 - Receipt preview built from persisted transaction data
+- Offline queue with auto/manual sync to `/api/transactions/sync`
+- Centralized API authorization with active-user and role checks
+- Profile endpoint for UI role display (`/api/me`)
+- Collection summary report endpoint (`/api/reports/collection-summary`)
 - Supabase schema + seed scripts
-- Basic offline queue utilities (IndexedDB)
+- Deployment and UAT checklists in `docs/`
 
 What is still pending:
 - Receipt number strategy should be made sequential/business-friendly
-- Full role-based workflows for school accountant/admin are incomplete
+- Full admin/staff management workflow UI is incomplete
 - Automated tests are not present yet
 
 ## Tech Stack
@@ -65,11 +69,17 @@ What is still pending:
 - `app/api/fee-structures/route.ts`
 - `app/api/transactions/route.ts`
 - `app/api/transactions/sync/route.ts`
+- `app/api/reports/collection-summary/route.ts`
+- `app/api/me/route.ts`
 - `app/api/auth/setup-demo/route.ts`
 
 ### Offline utilities
 - `lib/db/indexed-db.ts`
 - `hooks/use-offline-mode.ts`
+
+### Go-Live docs
+- `docs/DEPLOYMENT_CHECKLIST.md`
+- `docs/UAT_CHECKLIST.md`
 
 ### Database scripts
 - `scripts/01-init-schema.sql`
@@ -157,11 +167,10 @@ This matches the target operating model for school office/account staff.
 
 ## Recommended Next Development Steps
 
-1. Replace hardcoded `STUDENTS` and `FEE_TYPES` in `fee-collection-form.tsx` with API fetch from Supabase.
-2. Make receipt numbering deterministic and sequential for accounting (current format is timestamp-based).
-3. Add receipt print template fields for school logo and required legal text.
-4. Complete role-based access controls and staff management UI.
-5. Add tests for receipt generation, auth guard, and transaction persistence.
+1. Make receipt numbering deterministic and sequential for accounting (current format is timestamp-based).
+2. Add receipt print template fields for school logo and required legal text.
+3. Complete admin/staff management UI for role assignment and activation.
+4. Add automated tests for receipt generation, auth guard, offline sync, and reporting.
 
 ## Validation Commands
 

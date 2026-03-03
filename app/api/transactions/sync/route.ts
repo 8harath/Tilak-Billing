@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/client';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
 
 function generateReceiptNumber(): string {
@@ -9,7 +9,7 @@ function generateReceiptNumber(): string {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createClient();
+    const supabase = await createServerSupabaseClient();
     const body = await request.json();
 
     // Get current user

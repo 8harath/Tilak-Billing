@@ -9,7 +9,7 @@ This repository is in **active development**. Core UI flow exists, but productio
 
 What currently works:
 - Login UI and Supabase auth wiring
-- Local demo mode (app can run even before Supabase is configured)
+- Optional local demo mode (explicitly opt-in via env flag)
 - 3-step fee collection UI:
   1. Search/select student
   2. Select fee items and amounts
@@ -42,10 +42,11 @@ What is still pending:
 - `app/page.tsx`
   - Main route
   - Uses Supabase auth if configured
-  - Falls back to **local demo mode** if env vars are missing
+  - Shows setup guidance if Supabase env vars are missing
+  - Can run in **local demo mode** only when explicitly enabled in development
 - `components/login-form.tsx`
   - Staff login form
-  - Demo setup trigger via `/api/auth/setup-demo`
+  - Demo setup trigger via `/api/auth/setup-demo` (disabled by default)
 - `components/dashboard.tsx`
   - Header + logout + `FeeCollectionForm`
 
@@ -94,11 +95,17 @@ NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 SUPABASE_SERVICE_ROLE_KEY=...
 SUPABASE_URL=... # same as NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_ENABLE_LOCAL_DEMO_MODE=false
+NEXT_PUBLIC_ENABLE_DEMO_SETUP=false
+ENABLE_DEMO_SETUP=false
+DEMO_SETUP_TOKEN=
 ```
 
 Notes:
 - `NEXT_PUBLIC_*` values are required by browser and server routes.
 - `SUPABASE_SERVICE_ROLE_KEY` is required for demo setup endpoint/script.
+- `ENABLE_DEMO_SETUP` and `NEXT_PUBLIC_ENABLE_DEMO_SETUP` must be `true` to show and use demo-setup flow.
+- Demo setup endpoint is blocked in production.
 
 ### 3) Run database setup (Supabase SQL editor)
 
@@ -114,18 +121,25 @@ npm run dev
 
 Open: `http://localhost:3000`
 
-## Demo login
+## Demo login (development only)
 
 - Email: `staff@school.com`
 - Password: `Password123!`
 
 If user does not exist yet:
+- set `ENABLE_DEMO_SETUP=true` and `NEXT_PUBLIC_ENABLE_DEMO_SETUP=true`
+- optionally set `DEMO_SETUP_TOKEN` and send it via `x-demo-setup-token`
 - click `Setup & Test Demo` in login UI
 - or run `node scripts/03-create-demo-user.js`
 
 ## Local Demo Mode (without Supabase)
 
-If Supabase env vars are missing, app now starts in **Local Demo Mode** so you can practice the UI/receipt flow before DB integration.
+If Supabase env vars are missing, the app shows setup guidance by default.
+To practice UI flow without Supabase, explicitly enable local demo mode in development:
+
+```bash
+NEXT_PUBLIC_ENABLE_LOCAL_DEMO_MODE=true
+```
 
 This mode:
 - bypasses auth
@@ -152,6 +166,7 @@ This matches the target operating model for school office/account staff.
 ## Validation Commands
 
 ```bash
+npm run lint
 npx tsc --noEmit
 npm run build
 ```

@@ -1,9 +1,9 @@
-import { createClient } from '@/lib/supabase/client';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createClient();
+    const supabase = await createServerSupabaseClient();
     const { searchParams } = new URL(request.url);
     const classFilter = searchParams.get('class');
 

@@ -1,9 +1,16 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();
+    const { searchParams } = new URL(request.url);
+    const query = (searchParams.get('q') || '').trim();
+    const classFilter = (searchParams.get('class') || '').trim();
+    const limitParam = Number(searchParams.get('limit') || '20');
+    const limit = Number.isFinite(limitParam)
+      ? Math.min(Math.max(limitParam, 1), 100)
+      : 20;
 
     // Get current user
     const {
@@ -27,11 +34,26 @@ export async function GET() {
     }
 
     // Get students for this school
-    const { data: students, error: studentsError } = await supabase
+    let studentsQuery = supabase
       .from('students')
-      .select('*')
+      .select('id, name, roll_number, class, section, parent_email, parent_phone, status')
       .eq('school_id', userData.school_id)
-      .eq('status', 'active');
+      .eq('status', 'active')
+      .order('name', { ascending: true })
+      .limit(limit);
+
+    if (classFilter && classFilter.toLowerCase() !== 'all') {
+      studentsQuery = studentsQuery.eq('class', classFilter);
+    }
+
+    if (query) {
+      const escapedQuery = query.replace(/,/g, ' ');
+      studentsQuery = studentsQuery.or(
+        `name.ilike.%${escapedQuery}%,roll_number.ilike.%${escapedQuery}%`
+      );
+    }
+
+    const { data: students, error: studentsError } = await studentsQuery;
 
     if (studentsError) {
       return NextResponse.json({ error: studentsError.message }, { status: 500 });

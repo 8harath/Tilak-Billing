@@ -5,7 +5,7 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();
     const { searchParams } = new URL(request.url);
-    const classFilter = searchParams.get('class');
+    const classFilter = (searchParams.get('class') || '').trim();
 
     // Get current user
     const {
@@ -32,9 +32,10 @@ export async function GET(request: NextRequest) {
     let query = supabase
       .from('fee_structures')
       .select('*')
-      .eq('school_id', userData.school_id);
+      .eq('school_id', userData.school_id)
+      .order('name', { ascending: true });
 
-    if (classFilter) {
+    if (classFilter && classFilter.toLowerCase() !== 'all') {
       query = query.eq('class', classFilter);
     }
 

@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useRef } from 'react';
 import { Card } from '@/components/ui/card';
@@ -140,7 +140,7 @@ export function FeeCollectionForm() {
                       >
                         <div className="font-bold text-lg text-gray-900">{student.name}</div>
                         <div className="text-sm text-gray-600">
-                          {student.admissionNo} • Class {student.class} • Roll {student.roll}
+                          {student.admissionNo} | Class {student.class} | Roll {student.roll}
                         </div>
                       </button>
                     ))}
@@ -179,7 +179,7 @@ export function FeeCollectionForm() {
             <div className="bg-blue-100 border-2 border-blue-400 rounded-lg p-6 mb-8">
               <p className="text-sm text-blue-600 mb-1">Selected Student</p>
               <h2 className="text-3xl font-bold text-blue-900">{selectedStudent?.name}</h2>
-              <p className="text-blue-700 mt-2">{selectedStudent?.admissionNo} • Class {selectedStudent?.class}</p>
+              <p className="text-blue-700 mt-2">{selectedStudent?.admissionNo} | Class {selectedStudent?.class}</p>
             </div>
 
             {/* Available Fees */}
@@ -191,7 +191,7 @@ export function FeeCollectionForm() {
                   onClick={() => handleAddFee(fee)}
                   className="text-left p-4 bg-gray-50 hover:bg-gray-100 border-2 border-gray-300 hover:border-blue-400 rounded-lg transition font-semibold text-lg"
                 >
-                  {fee.name} <span className="float-right text-blue-600">₹{fee.defaultAmount}</span>
+                  {fee.name} <span className="float-right text-blue-600">Rs {fee.defaultAmount}</span>
                 </button>
               ))}
             </div>
@@ -225,7 +225,7 @@ export function FeeCollectionForm() {
             {/* Total Amount */}
             <div className="bg-green-100 border-4 border-green-600 rounded-lg p-6 mb-8">
               <p className="text-sm text-green-700 mb-2">Total Amount</p>
-              <h3 className="text-4xl font-bold text-green-900">₹{totalAmount.toFixed(2)}</h3>
+              <h3 className="text-4xl font-bold text-green-900">Rs {totalAmount.toFixed(2)}</h3>
             </div>
 
             {/* Buttons */}
@@ -332,7 +332,7 @@ export function FeeCollectionForm() {
                 {receiptData.fees.map((fee: any, idx: number) => (
                   <tr key={idx} className="border-b border-gray-300">
                     <td className="py-2">{fee.type}</td>
-                    <td className="text-right py-2">₹{fee.amount.toFixed(2)}</td>
+                    <td className="text-right py-2">Rs {fee.amount.toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -340,7 +340,7 @@ export function FeeCollectionForm() {
 
             <div className="bg-green-100 border-2 border-green-800 p-4 mb-6 rounded flex justify-between items-center">
               <span className="font-bold">TOTAL PAID:</span>
-              <span className="text-2xl font-bold">₹{receiptData.total.toFixed(2)}</span>
+              <span className="text-2xl font-bold">Rs {receiptData.total.toFixed(2)}</span>
             </div>
 
             <div className="flex-1"></div>
@@ -406,7 +406,7 @@ export function FeeCollectionForm() {
                 {receiptData.fees.map((fee: any, idx: number) => (
                   <tr key={idx} className="border-b border-gray-300">
                     <td className="py-2">{fee.type}</td>
-                    <td className="text-right py-2">₹{fee.amount.toFixed(2)}</td>
+                    <td className="text-right py-2">Rs {fee.amount.toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -414,7 +414,7 @@ export function FeeCollectionForm() {
 
             <div className="bg-green-100 border-2 border-green-800 p-4 mb-6 rounded flex justify-between items-center">
               <span className="font-bold">TOTAL PAID:</span>
-              <span className="text-2xl font-bold">₹{receiptData.total.toFixed(2)}</span>
+              <span className="text-2xl font-bold">Rs {receiptData.total.toFixed(2)}</span>
             </div>
 
             <div className="flex-1"></div>
@@ -431,3 +431,4 @@ export function FeeCollectionForm() {
 
   return null;
 }
+

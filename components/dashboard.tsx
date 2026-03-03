@@ -9,9 +9,10 @@ import { FeeCollectionForm } from './fee-collection-form';
 
 interface DashboardProps {
   user?: any;
+  demoMode?: boolean;
 }
 
-export function Dashboard({ user }: DashboardProps) {
+export function Dashboard({ user, demoMode = false }: DashboardProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
@@ -41,15 +42,21 @@ export function Dashboard({ user }: DashboardProps) {
             {user?.email && (
               <span className="text-sm text-gray-700">{user.email}</span>
             )}
-            <Button
-              onClick={handleLogout}
-              disabled={loading}
-              variant="outline"
-              size="sm"
-            >
-              <LogOut className="w-4 h-4 mr-2" />
-              {loading ? 'Signing out...' : 'Sign Out'}
-            </Button>
+            {demoMode ? (
+              <span className="text-xs px-3 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
+                Local Demo Mode
+              </span>
+            ) : (
+              <Button
+                onClick={handleLogout}
+                disabled={loading}
+                variant="outline"
+                size="sm"
+              >
+                <LogOut className="w-4 h-4 mr-2" />
+                {loading ? 'Signing out...' : 'Sign Out'}
+              </Button>
+            )}
           </div>
         </div>
       </header>

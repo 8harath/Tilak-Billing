@@ -12,18 +12,19 @@ What currently works:
 - Optional local demo mode (explicitly opt-in via env flag)
 - 3-step fee collection UI:
   1. Search/select student
-  2. Select fee items and amounts
-  3. Generate printable receipt
+  2. Select fee items and amounts (from DB fee structures or custom line item)
+  3. Save transaction and generate printable receipt
 - A4 dual-receipt print layout:
   - Top half: management copy
   - Bottom half: parent copy
-- API route scaffolding for students, fee structures, transactions, sync
+- Student API search by name/roll and class filter
+- Fee structure API class filtering
+- Transactions API with item-level persistence (`transaction_items`)
+- Receipt preview built from persisted transaction data
 - Supabase schema + seed scripts
 - Basic offline queue utilities (IndexedDB)
 
 What is still pending:
-- Frontend is still using static mock student/fee data in the main form
-- End-to-end API integration from form -> transaction save is incomplete
 - Receipt number strategy should be made sequential/business-friendly
 - Full role-based workflows for school accountant/admin are incomplete
 - Automated tests are not present yet
@@ -157,11 +158,10 @@ This matches the target operating model for school office/account staff.
 ## Recommended Next Development Steps
 
 1. Replace hardcoded `STUDENTS` and `FEE_TYPES` in `fee-collection-form.tsx` with API fetch from Supabase.
-2. On "Generate Receipt", persist transaction via `POST /api/transactions`.
-3. Store transaction line items in `transaction_items`.
-4. Add receipt print template fields for school logo and required legal text.
-5. Add class-wise filters (Pre-Nursery to 10th standard) and robust student search by roll/admission/name.
-6. Add tests for receipt generation, auth guard, and transaction persistence.
+2. Make receipt numbering deterministic and sequential for accounting (current format is timestamp-based).
+3. Add receipt print template fields for school logo and required legal text.
+4. Complete role-based access controls and staff management UI.
+5. Add tests for receipt generation, auth guard, and transaction persistence.
 
 ## Validation Commands
 

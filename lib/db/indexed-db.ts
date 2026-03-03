@@ -59,10 +59,9 @@ export async function getUnsyncedTransactions(): Promise<PendingTransaction[]> {
   const db = await initDB();
   return new Promise((resolve, reject) => {
     const store = db.transaction(PENDING_STORE, 'readonly').objectStore(PENDING_STORE);
-    const index = store.index('synced');
-    const request = index.getAll(false);
+    const request = store.getAll();
     request.onerror = () => reject(request.error);
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => resolve(request.result.filter((tx) => !tx.synced));
   });
 }
 

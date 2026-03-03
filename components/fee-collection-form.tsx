@@ -93,14 +93,6 @@ export function FeeCollectionForm() {
     window.print();
   };
 
-  const handleReset = () => {
-    setStep(1);
-    setSearchQuery('');
-    setSelectedStudent(null);
-    setSelectedFees([]);
-    setReceiptData(null);
-  };
-
   // ===== STEP 1: STUDENT SEARCH =====
   if (step === 1) {
     return (

@@ -83,7 +83,7 @@ export function LoginForm() {
 
       router.push('/');
       router.refresh();
-    } catch (err) {
+    } catch {
       setError('An unexpected error occurred');
     } finally {
       setLoading(false);

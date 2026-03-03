@@ -1,6 +1,6 @@
-import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { authorizeRequest } from '@/lib/server/authz';
 
 const transactionItemSchema = z.object({
   feeStructureId: z.string().uuid().optional().nullable(),
@@ -117,7 +117,12 @@ const transactionDetailsSelect = `
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient();
+    const authorization = await authorizeRequest();
+    if ('response' in authorization) {
+      return authorization.response;
+    }
+
+    const { supabase, profile } = authorization;
     const { searchParams } = new URL(request.url);
     const receiptNumber = (searchParams.get('receiptNumber') || '').trim();
     const limitParam = Number(searchParams.get('limit') || '100');
@@ -125,32 +130,11 @@ export async function GET(request: NextRequest) {
       ? Math.min(Math.max(limitParam, 1), 200)
       : 100;
 
-    // Get current user
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Get user's school
-    const { data: userData, error: userDataError } = await supabase
-      .from('users')
-      .select('school_id')
-      .eq('id', user.id)
-      .single();
-
-    if (userDataError || !userData) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
-
     if (receiptNumber) {
       const { data: transaction, error: txError } = await supabase
         .from('transactions')
         .select(transactionDetailsSelect)
-        .eq('school_id', userData.school_id)
+        .eq('school_id', profile.school_id)
         .eq('receipt_number', receiptNumber)
         .single();
 
@@ -179,7 +163,7 @@ export async function GET(request: NextRequest) {
     const { data: transactions, error: txError } = await supabase
       .from('transactions')
       .select(transactionListSelect)
-      .eq('school_id', userData.school_id)
+      .eq('school_id', profile.school_id)
       .order('created_at', { ascending: false })
       .limit(limit);
 
@@ -205,7 +189,16 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient();
+    const authorization = await authorizeRequest([
+      'admin',
+      'accountant',
+      'fee_operator',
+    ]);
+    if ('response' in authorization) {
+      return authorization.response;
+    }
+
+    const { supabase, user, profile } = authorization;
     const body = await request.json();
     const parsedBody = createTransactionSchema.safeParse(body);
 
@@ -217,27 +210,6 @@ export async function POST(request: NextRequest) {
         },
         { status: 400 }
       );
-    }
-
-    // Get current user
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Get user's school
-    const { data: userData, error: userDataError } = await supabase
-      .from('users')
-      .select('school_id')
-      .eq('id', user.id)
-      .single();
-
-    if (userDataError || !userData) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
     const totalAmount = parsedBody.data.items.reduce(
@@ -254,7 +226,7 @@ export async function POST(request: NextRequest) {
     const { data: transaction, error: txError } = await supabase
       .from('transactions')
       .insert({
-        school_id: userData.school_id,
+        school_id: profile.school_id,
         student_id: parsedBody.data.studentId,
         amount_paid: totalAmount,
         fee_type: feeTypeSummary,

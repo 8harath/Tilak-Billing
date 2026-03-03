@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { LogOut } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { FeeCollectionForm } from './fee-collection-form';
 
 interface DashboardProps {
@@ -15,6 +15,29 @@ interface DashboardProps {
 export function Dashboard({ user, demoMode = false }: DashboardProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [roleLabel, setRoleLabel] = useState('fee_operator');
+
+  useEffect(() => {
+    if (demoMode) {
+      setRoleLabel('demo');
+      return;
+    }
+
+    const loadProfile = async () => {
+      try {
+        const response = await fetch('/api/me');
+        if (!response.ok) return;
+        const profile = await response.json();
+        if (profile?.role) {
+          setRoleLabel(profile.role);
+        }
+      } catch (error) {
+        console.error('Failed to load profile:', error);
+      }
+    };
+
+    void loadProfile();
+  }, [demoMode]);
 
   const handleLogout = async () => {
     setLoading(true);
@@ -42,6 +65,9 @@ export function Dashboard({ user, demoMode = false }: DashboardProps) {
             {user?.email && (
               <span className="text-sm text-gray-700">{user.email}</span>
             )}
+            <span className="text-xs px-3 py-1 rounded-full bg-slate-100 text-slate-800 border border-slate-300 uppercase tracking-wide">
+              {roleLabel}
+            </span>
             {demoMode ? (
               <span className="text-xs px-3 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
                 Local Demo Mode

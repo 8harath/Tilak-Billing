@@ -1,38 +1,22 @@
-import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
+import { authorizeRequest } from '@/lib/server/authz';
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient();
+    const authorization = await authorizeRequest();
+    if ('response' in authorization) {
+      return authorization.response;
+    }
+
+    const { supabase, profile } = authorization;
     const { searchParams } = new URL(request.url);
     const classFilter = (searchParams.get('class') || '').trim();
-
-    // Get current user
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Get user's school
-    const { data: userData, error: userDataError } = await supabase
-      .from('users')
-      .select('school_id')
-      .eq('id', user.id)
-      .single();
-
-    if (userDataError || !userData) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
 
     // Get fee structures for this school
     let query = supabase
       .from('fee_structures')
       .select('*')
-      .eq('school_id', userData.school_id)
+      .eq('school_id', profile.school_id)
       .order('name', { ascending: true });
 
     if (classFilter && classFilter.toLowerCase() !== 'all') {

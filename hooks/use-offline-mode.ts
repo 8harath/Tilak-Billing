@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   PendingTransaction,
+  PendingTransactionItem,
   getPendingTransactions,
   addPendingTransaction,
   getUnsyncedTransactions,
-  markTransactionSynced,
   deletePendingTransaction,
 } from '@/lib/db/indexed-db';
 
@@ -67,7 +67,8 @@ export function useOfflineMode() {
       amount: number,
       feeType: string,
       notes: string,
-      paymentDate: string
+      paymentDate: string,
+      items?: PendingTransactionItem[]
     ): Promise<string> => {
       const transaction: PendingTransaction = {
         id: `${Date.now()}-${Math.random()}`,
@@ -77,6 +78,7 @@ export function useOfflineMode() {
         feeType,
         notes,
         paymentDate,
+        items: items || [],
         timestamp: Date.now(),
         synced: false,
       };
@@ -98,19 +100,32 @@ export function useOfflineMode() {
   );
 
   const syncTransactions = useCallback(
-    async (syncFn: (transactions: PendingTransaction[]) => Promise<void>) => {
+    async (
+      syncFn: (
+        transactions: PendingTransaction[]
+      ) => Promise<{ syncedLocalIds?: string[] } | void>
+    ) => {
       setState((prev) => ({ ...prev, isSyncing: true }));
       try {
         const unsynced = await getUnsyncedTransactions();
         if (unsynced.length > 0) {
-          await syncFn(unsynced);
-          for (const transaction of unsynced) {
-            await markTransactionSynced(transaction.id);
+          const result = await syncFn(unsynced);
+          const idsToClear = new Set(
+            result?.syncedLocalIds && result.syncedLocalIds.length > 0
+              ? result.syncedLocalIds
+              : unsynced.map((transaction) => transaction.id)
+          );
+
+          for (const transactionId of idsToClear) {
+            await deletePendingTransaction(transactionId);
           }
+
           setState((prev) => ({
             ...prev,
-            pendingTransactions: prev.pendingTransactions.filter((t) => t.synced),
-            pendingCount: 0,
+            pendingTransactions: prev.pendingTransactions.filter(
+              (transaction) => !idsToClear.has(transaction.id)
+            ),
+            pendingCount: Math.max(0, prev.pendingCount - idsToClear.size),
           }));
         }
       } catch (error) {

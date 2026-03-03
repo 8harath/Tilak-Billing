@@ -3,6 +3,12 @@ const DB_NAME = 'school-fee-db';
 const DB_VERSION = 1;
 const PENDING_STORE = 'pending_transactions';
 
+export interface PendingTransactionItem {
+  feeStructureId?: string | null;
+  description: string;
+  amount: number;
+}
+
 export interface PendingTransaction {
   id: string;
   studentId: string;
@@ -11,6 +17,7 @@ export interface PendingTransaction {
   feeType: string;
   notes: string;
   paymentDate: string;
+  items?: PendingTransactionItem[];
   timestamp: number;
   synced: boolean;
 }

@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Search, Printer, X } from 'lucide-react';
+import { useOfflineMode } from '@/hooks/use-offline-mode';
 
 interface StudentRecord {
   id: string;
@@ -169,6 +170,15 @@ export function FeeCollectionForm() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
+  const [syncMessage, setSyncMessage] = useState('');
+
+  const {
+    isOnline,
+    pendingCount,
+    isSyncing,
+    syncTransactions,
+    addTransaction,
+  } = useOfflineMode();
 
   const totalAmount = useMemo(
     () => selectedFees.reduce((sum, fee) => sum + fee.amount, 0),
@@ -233,6 +243,76 @@ export function FeeCollectionForm() {
     }
   }, []);
 
+  const handleSyncPending = useCallback(async () => {
+    if (!isOnline || pendingCount === 0) {
+      return;
+    }
+
+    setSyncMessage('');
+    setFormError('');
+
+    try {
+      await syncTransactions(async (pendingTransactions) => {
+        const payload = {
+          transactions: pendingTransactions.map((pendingTx) => ({
+            localId: pendingTx.id,
+            studentId: pendingTx.studentId,
+            paymentDate: pendingTx.paymentDate,
+            notes: pendingTx.notes,
+            items:
+              pendingTx.items && pendingTx.items.length > 0
+                ? pendingTx.items.map((item) => ({
+                    feeStructureId: item.feeStructureId || null,
+                    description: item.description,
+                    amount: item.amount,
+                  }))
+                : [
+                    {
+                      feeStructureId: null,
+                      description: pendingTx.feeType,
+                      amount: pendingTx.amount,
+                    },
+                  ],
+          })),
+        };
+
+        const response = await fetch('/api/transactions/sync', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Failed to sync offline receipts');
+        }
+
+        const data = await response.json();
+        if (data.failed && data.failed > 0) {
+          throw new Error(
+            `Synced ${data.synced} receipts. ${data.failed} failed and need retry.`
+          );
+        }
+
+        return {
+          syncedLocalIds: Array.isArray(data.syncedLocalIds)
+            ? data.syncedLocalIds
+            : undefined,
+        };
+      });
+
+      setSyncMessage('Offline receipts synced successfully.');
+    } catch (error) {
+      setFormError(
+        error instanceof Error
+          ? error.message
+          : 'Failed to sync offline receipts'
+      );
+    }
+  }, [isOnline, pendingCount, syncTransactions]);
+
   useEffect(() => {
     if (step !== 1) return;
     const timer = setTimeout(() => {
@@ -245,6 +325,12 @@ export function FeeCollectionForm() {
     if (step !== 2 || !selectedStudent) return;
     void loadFeeStructures(selectedStudent.class);
   }, [loadFeeStructures, selectedStudent, step]);
+
+  useEffect(() => {
+    if (isOnline && pendingCount > 0) {
+      void handleSyncPending();
+    }
+  }, [handleSyncPending, isOnline, pendingCount]);
 
   const handleSelectStudent = (student: StudentRecord) => {
     setSelectedStudent(student);
@@ -309,6 +395,47 @@ export function FeeCollectionForm() {
     );
   };
 
+  const queueOfflineTransaction = useCallback(async () => {
+    if (!selectedStudent) {
+      return;
+    }
+
+    const feeSummary =
+      selectedFees.length === 1
+        ? selectedFees[0].type
+        : `${selectedFees.length} fee items`;
+
+    await addTransaction(
+      selectedStudent.id,
+      selectedStudent.name,
+      totalAmount,
+      feeSummary,
+      notes,
+      paymentDate,
+      selectedFees.map((fee) => ({
+        feeStructureId: fee.feeStructureId,
+        description: fee.type,
+        amount: fee.amount,
+      }))
+    );
+
+    const localReceipt = buildReceiptData(
+      null,
+      selectedStudent,
+      selectedFees,
+      paymentDate,
+      notes
+    );
+    localReceipt.receiptNumber = `OFF-${Date.now()}`;
+    localReceipt.notes = [localReceipt.notes, 'Pending sync to server']
+      .filter(Boolean)
+      .join(' | ');
+
+    setReceiptData(localReceipt);
+    setStep(3);
+    setSyncMessage('Receipt saved offline and queued for sync.');
+  }, [addTransaction, notes, paymentDate, selectedFees, selectedStudent, totalAmount]);
+
   const handleGenerateReceipt = async () => {
     if (!selectedStudent) {
       setFormError('Please select a student');
@@ -325,8 +452,14 @@ export function FeeCollectionForm() {
 
     setSubmitting(true);
     setFormError('');
+    setSyncMessage('');
 
     try {
+      if (!isOnline) {
+        await queueOfflineTransaction();
+        return;
+      }
+
       const payload = {
         studentId: selectedStudent.id,
         paymentDate,
@@ -379,9 +512,26 @@ export function FeeCollectionForm() {
       );
       setStep(3);
     } catch (error) {
-      setFormError(
-        error instanceof Error ? error.message : 'Failed to generate receipt'
-      );
+      const canQueueOffline = !isOnline || error instanceof TypeError;
+
+      if (canQueueOffline) {
+        try {
+          await queueOfflineTransaction();
+          setSyncMessage(
+            'Network issue detected. Receipt saved offline and queued for sync.'
+          );
+        } catch (offlineError) {
+          setFormError(
+            offlineError instanceof Error
+              ? offlineError.message
+              : 'Failed to queue offline receipt'
+          );
+        }
+      } else {
+        setFormError(
+          error instanceof Error ? error.message : 'Failed to generate receipt'
+        );
+      }
     } finally {
       setSubmitting(false);
     }
@@ -390,6 +540,40 @@ export function FeeCollectionForm() {
   const handlePrint = () => {
     window.print();
   };
+
+  const statusBanner = (
+    <div
+      className={`mb-4 rounded-lg border p-3 text-sm ${
+        isOnline
+          ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
+          : 'bg-amber-50 border-amber-300 text-amber-900'
+      }`}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <span className="font-semibold">
+            {isOnline ? 'Online' : 'Offline'}
+          </span>
+          {pendingCount > 0 && (
+            <span className="ml-2">
+              Pending Offline Receipts: {pendingCount}
+            </span>
+          )}
+        </div>
+        {isOnline && pendingCount > 0 && (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={isSyncing}
+            onClick={() => void handleSyncPending()}
+          >
+            {isSyncing ? 'Syncing...' : 'Sync Pending'}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
 
   if (step === 1) {
     return (
@@ -402,6 +586,14 @@ export function FeeCollectionForm() {
               </h1>
               <p className="text-lg text-gray-600">Step 1 of 3: Search Student</p>
             </div>
+
+            {statusBanner}
+
+            {syncMessage && (
+              <div className="mb-4 rounded-lg border border-blue-300 bg-blue-50 p-3 text-sm text-blue-800">
+                {syncMessage}
+              </div>
+            )}
 
             {studentsError && (
               <div className="mb-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700">
@@ -494,6 +686,14 @@ export function FeeCollectionForm() {
               </h1>
               <p className="text-lg text-gray-600">Step 2 of 3: Select Fees</p>
             </div>
+
+            {statusBanner}
+
+            {syncMessage && (
+              <div className="mb-4 rounded-lg border border-blue-300 bg-blue-50 p-3 text-sm text-blue-800">
+                {syncMessage}
+              </div>
+            )}
 
             {formError && (
               <div className="mb-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700">
@@ -667,6 +867,19 @@ export function FeeCollectionForm() {
             </Button>
           </div>
         </div>
+
+        {(syncMessage || pendingCount > 0) && (
+          <div className="no-print px-4 py-3 border-b border-gray-200 bg-slate-50">
+            {syncMessage && (
+              <p className="text-sm text-blue-800 font-medium">{syncMessage}</p>
+            )}
+            {pendingCount > 0 && (
+              <p className="text-sm text-slate-700">
+                Pending offline receipts: {pendingCount}
+              </p>
+            )}
+          </div>
+        )}
 
         <div ref={receiptRef} className="bg-white">
           <style>{`

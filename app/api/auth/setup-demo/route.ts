@@ -1,7 +1,24 @@
 import { createClient } from '@supabase/supabase-js';
 
-export async function POST() {
+function isDemoSetupAllowed() {
+  return process.env.NODE_ENV !== 'production' &&
+    process.env.ENABLE_DEMO_SETUP === 'true';
+}
+
+export async function POST(request: Request) {
   try {
+    if (!isDemoSetupAllowed()) {
+      return Response.json({ error: 'Not found' }, { status: 404 });
+    }
+
+    const expectedToken = process.env.DEMO_SETUP_TOKEN;
+    if (expectedToken) {
+      const token = request.headers.get('x-demo-setup-token');
+      if (token !== expectedToken) {
+        return Response.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+    }
+
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 

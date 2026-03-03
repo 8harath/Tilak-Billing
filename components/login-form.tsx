@@ -2,21 +2,35 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
+import {
+  createClient,
+  isDemoSetupEnabled,
+  isSupabaseConfigured,
+} from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { AlertCircle } from 'lucide-react';
 
 export function LoginForm() {
-  const [email, setEmail] = useState('staff@school.com');
-  const [password, setPassword] = useState('Password123!');
+  const demoSetupEnabled = isDemoSetupEnabled();
+  const [email, setEmail] = useState(
+    demoSetupEnabled ? 'staff@school.com' : ''
+  );
+  const [password, setPassword] = useState(
+    demoSetupEnabled ? 'Password123!' : ''
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [setupDone, setSetupDone] = useState(false);
   const router = useRouter();
 
   const handleSetupDemo = async () => {
+    if (!demoSetupEnabled) {
+      setError('Demo setup is disabled in this environment');
+      return;
+    }
+
     setError('');
     setLoading(true);
 
@@ -51,6 +65,11 @@ export function LoginForm() {
     setLoading(true);
 
     try {
+      if (!isSupabaseConfigured()) {
+        setError('Supabase environment is not configured');
+        return;
+      }
+
       const supabase = createClient();
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email,
@@ -137,28 +156,32 @@ export function LoginForm() {
         </form>
 
         <div className="space-y-3">
-          <Button
-            type="button"
-            onClick={handleSetupDemo}
-            disabled={loading}
-            variant="outline"
-            className="w-full"
-          >
-            {loading ? 'Setting up...' : 'Setup & Test Demo'}
-          </Button>
+          {demoSetupEnabled && (
+            <Button
+              type="button"
+              onClick={handleSetupDemo}
+              disabled={loading}
+              variant="outline"
+              className="w-full"
+            >
+              {loading ? 'Setting up...' : 'Setup & Test Demo'}
+            </Button>
+          )}
         </div>
 
-        <div className="space-y-2 pt-4 border-t border-border">
-          <p className="text-xs text-muted-foreground text-center font-medium">
-            Demo Credentials
-          </p>
-          <p className="text-xs text-muted-foreground text-center">
-            Email: staff@school.com
-          </p>
-          <p className="text-xs text-muted-foreground text-center">
-            Password: Password123!
-          </p>
-        </div>
+        {demoSetupEnabled && (
+          <div className="space-y-2 pt-4 border-t border-border">
+            <p className="text-xs text-muted-foreground text-center font-medium">
+              Demo Credentials
+            </p>
+            <p className="text-xs text-muted-foreground text-center">
+              Email: staff@school.com
+            </p>
+            <p className="text-xs text-muted-foreground text-center">
+              Password: Password123!
+            </p>
+          </div>
+        )}
       </Card>
     </div>
   );

@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
+import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
 import { LoginForm } from '@/components/login-form';
 import { Dashboard } from '@/components/dashboard';
 
@@ -10,11 +9,19 @@ export default function Home() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
-  const router = useRouter();
+  const [demoMode, setDemoMode] = useState(false);
 
   useEffect(() => {
     setMounted(true);
+    if (!isSupabaseConfigured()) {
+      setDemoMode(true);
+      setUser({ email: 'local-demo@tilak-school.local' });
+      setLoading(false);
+      return;
+    }
+
     const supabase = createClient();
+
     const checkAuth = async () => {
       try {
         const {
@@ -55,5 +62,5 @@ export default function Home() {
     return <LoginForm />;
   }
 
-  return <Dashboard user={user} />;
+  return <Dashboard user={user} demoMode={demoMode} />;
 }

@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { authorizeRequest } from '@/lib/server/authz';
+import {
+  createFeeTransactionAtomic,
+  TransactionRpcError,
+} from '@/lib/server/transaction-rpc';
 
 const transactionItemSchema = z.object({
   feeStructureId: z.string().uuid().optional().nullable(),
@@ -64,12 +68,6 @@ const createTransactionSchema = z
       ],
     };
   });
-
-function generateReceiptNumber(): string {
-  const timestamp = Date.now();
-  const random = Math.floor(Math.random() * 1000);
-  return `RCP-${timestamp}-${random}`;
-}
 
 const transactionListSelect = `
   id,
@@ -198,7 +196,7 @@ export async function POST(request: NextRequest) {
       return authorization.response;
     }
 
-    const { supabase, user, profile } = authorization;
+    const { supabase } = authorization;
     const body = await request.json();
     const parsedBody = createTransactionSchema.safeParse(body);
 
@@ -212,70 +210,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const totalAmount = parsedBody.data.items.reduce(
-      (sum, item) => sum + item.amount,
-      0
-    );
-    const feeTypeSummary =
-      parsedBody.data.items.length === 1
-        ? parsedBody.data.items[0].description
-        : `${parsedBody.data.items.length} fee items`;
-
-    // Create transaction header
-    const receiptNumber = generateReceiptNumber();
-    const { data: transaction, error: txError } = await supabase
-      .from('transactions')
-      .insert({
-        school_id: profile.school_id,
-        student_id: parsedBody.data.studentId,
-        amount_paid: totalAmount,
-        fee_type: feeTypeSummary,
-        payment_date: parsedBody.data.paymentDate,
-        notes: parsedBody.data.notes || '',
-        receipt_number: receiptNumber,
-        created_by: user.id,
-      })
-      .select()
-      .single();
-
-    if (txError) {
-      return NextResponse.json({ error: txError.message }, { status: 500 });
-    }
-
-    const transactionItems = parsedBody.data.items.map((item) => ({
-      transaction_id: transaction.id,
-      fee_structure_id: item.feeStructureId || null,
-      description: item.description,
-      amount: item.amount,
-    }));
-
-    const { error: itemInsertError } = await supabase
-      .from('transaction_items')
-      .insert(transactionItems);
-
-    if (itemInsertError) {
-      return NextResponse.json(
-        {
-          error: 'Transaction saved but line items failed',
-          details: itemInsertError.message,
-          transactionId: transaction.id,
-        },
-        { status: 500 }
-      );
-    }
+    const created = await createFeeTransactionAtomic({
+      supabase,
+      studentId: parsedBody.data.studentId,
+      paymentDate: parsedBody.data.paymentDate,
+      notes: parsedBody.data.notes || '',
+      items: parsedBody.data.items.map((item) => ({
+        feeStructureId: item.feeStructureId || null,
+        description: item.description,
+        amount: item.amount,
+      })),
+    });
 
     const { data: createdTransaction, error: fetchError } = await supabase
       .from('transactions')
       .select(transactionDetailsSelect)
-      .eq('id', transaction.id)
+      .eq('id', created.id)
       .single();
 
     if (fetchError) {
-      return NextResponse.json(transaction, { status: 201 });
+      return NextResponse.json(
+        { id: created.id, receipt_number: created.receiptNumber },
+        { status: 201 }
+      );
     }
 
     return NextResponse.json(createdTransaction, { status: 201 });
   } catch (error) {
+    if (error instanceof TransactionRpcError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
+
     if (error instanceof SyntaxError) {
       return NextResponse.json({ error: 'Invalid JSON payload' }, { status: 400 });
     }

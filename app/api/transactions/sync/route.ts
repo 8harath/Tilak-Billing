@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { authorizeRequest } from '@/lib/server/authz';
+import {
+  createFeeTransactionAtomic,
+  TransactionRpcError,
+} from '@/lib/server/transaction-rpc';
 
 const syncItemSchema = z.object({
   feeStructureId: z.string().uuid().optional().nullable(),
@@ -74,12 +78,6 @@ const syncTransactionsSchema = z.object({
     .max(200, 'Too many transactions in a single sync request'),
 });
 
-function generateReceiptNumber(): string {
-  const timestamp = Date.now();
-  const random = Math.floor(Math.random() * 1000);
-  return `RCP-${timestamp}-${random}`;
-}
-
 export async function POST(request: NextRequest) {
   try {
     const authorization = await authorizeRequest([
@@ -91,7 +89,7 @@ export async function POST(request: NextRequest) {
       return authorization.response;
     }
 
-    const { supabase, user, profile } = authorization;
+    const { supabase } = authorization;
     const body = await request.json();
     const parsedBody = syncTransactionsSchema.safeParse(body);
 
@@ -118,65 +116,27 @@ export async function POST(request: NextRequest) {
 
     for (const tx of transactions) {
       try {
-        const totalAmount = tx.items.reduce((sum, item) => sum + item.amount, 0);
-        const feeTypeSummary =
-          tx.items.length === 1
-            ? tx.items[0].description
-            : `${tx.items.length} fee items`;
-
-        const receiptNumber = generateReceiptNumber();
-        const { data: createdTx, error: txError } = await supabase
-          .from('transactions')
-          .insert({
-            school_id: profile.school_id,
-            student_id: tx.studentId,
-            amount_paid: totalAmount,
-            fee_type: feeTypeSummary,
-            payment_date: tx.paymentDate,
-            notes: tx.notes || '',
-            receipt_number: receiptNumber,
-            created_by: user.id,
-          })
-          .select('id, receipt_number')
-          .single();
-
-        if (txError || !createdTx) {
-          failedTransactions.push({
-            localId: tx.localId || null,
-            error: txError?.message || 'Failed to create transaction',
-          });
-          continue;
-        }
-
-        const itemsPayload = tx.items.map((item) => ({
-          transaction_id: createdTx.id,
-          fee_structure_id: item.feeStructureId || null,
-          description: item.description,
-          amount: item.amount,
-        }));
-
-        const { error: itemsError } = await supabase
-          .from('transaction_items')
-          .insert(itemsPayload);
-
-        if (itemsError) {
-          failedTransactions.push({
-            localId: tx.localId || null,
-            error: `Transaction created but items failed: ${itemsError.message}`,
-          });
-          continue;
-        }
+        const createdTx = await createFeeTransactionAtomic({
+          supabase,
+          studentId: tx.studentId,
+          paymentDate: tx.paymentDate,
+          notes: tx.notes || '',
+          items: tx.items.map((item) => ({
+            feeStructureId: item.feeStructureId || null,
+            description: item.description,
+            amount: item.amount,
+          })),
+        });
 
         syncedTransactions.push({
           localId: tx.localId || null,
           id: createdTx.id,
-          receiptNumber: createdTx.receipt_number,
+          receiptNumber: createdTx.receiptNumber,
         });
       } catch (error) {
         failedTransactions.push({
           localId: tx.localId || null,
-          error:
-            error instanceof Error ? error.message : 'Unexpected sync failure',
+          error: error instanceof Error ? error.message : 'Unexpected sync failure',
         });
       }
     }
@@ -196,6 +156,10 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     );
   } catch (error) {
+    if (error instanceof TransactionRpcError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
+
     if (error instanceof SyntaxError) {
       return NextResponse.json({ error: 'Invalid JSON payload' }, { status: 400 });
     }

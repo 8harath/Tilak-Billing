@@ -13,6 +13,7 @@
 ## 2) Database Baseline
 - Run `scripts/01-init-schema.sql` in Supabase SQL editor
 - Run `scripts/02-setup-demo-data.sql` only for staging/demo environments
+- Run `scripts/04-atomic-sequential-receipts.sql` for existing databases upgrading to latest APIs
 - Verify RLS policies are enabled for:
   - `students`
   - `fee_structures`

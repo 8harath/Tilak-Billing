@@ -20,6 +20,8 @@ What currently works:
 - Student API search by name/roll and class filter
 - Fee structure API class filtering
 - Transactions API with item-level persistence (`transaction_items`)
+- Atomic transaction creation via DB RPC (`create_fee_transaction`)
+- Sequential receipt numbering per school/year
 - Receipt preview built from persisted transaction data
 - Offline queue with auto/manual sync to `/api/transactions/sync`
 - Centralized API authorization with active-user and role checks
@@ -29,7 +31,6 @@ What currently works:
 - Deployment and UAT checklists in `docs/`
 
 What is still pending:
-- Receipt number strategy should be made sequential/business-friendly
 - Full admin/staff management workflow UI is incomplete
 - Automated tests are not present yet
 
@@ -88,6 +89,8 @@ What is still pending:
   - Seed school/students/fee structures
 - `scripts/03-create-demo-user.js`
   - Creates demo auth user profile in Supabase
+- `scripts/04-atomic-sequential-receipts.sql`
+  - Upgrade script for atomic transaction RPC + sequential receipt numbering
 
 ## Setup
 
@@ -123,6 +126,7 @@ Notes:
 Execute in order:
 1. `scripts/01-init-schema.sql`
 2. `scripts/02-setup-demo-data.sql`
+3. For existing deployed databases, run `scripts/04-atomic-sequential-receipts.sql`
 
 ### 4) Run app
 
@@ -167,10 +171,9 @@ This matches the target operating model for school office/account staff.
 
 ## Recommended Next Development Steps
 
-1. Make receipt numbering deterministic and sequential for accounting (current format is timestamp-based).
-2. Add receipt print template fields for school logo and required legal text.
-3. Complete admin/staff management UI for role assignment and activation.
-4. Add automated tests for receipt generation, auth guard, offline sync, and reporting.
+1. Add receipt print template fields for school logo and required legal text.
+2. Complete admin/staff management UI for role assignment and activation.
+3. Add automated tests for receipt generation, auth guard, offline sync, and reporting.
 
 ## Validation Commands
 
